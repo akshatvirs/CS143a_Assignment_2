@@ -77,6 +77,30 @@ class Kernel:
         if self.scheduling_algorithm == "FCFS":
             if self.running is self.idle_pcb:
                 self.running = self.ready_queue.popleft()
+        elif self.scheduling_algorithm == "Priority":
+            candidates = list(self.ready_queue)
+            if self.running is not self.idle_pcb:
+                candidates.append(self.running)
+
+            if not candidates:
+                self.running = self.idle_pcb
+                return
+
+            best_pcb = candidates[0]
+
+            for p in candidates[1:]:
+                if p.priority > best_pcb.priority:
+                    best_pcb = p
+                elif p.priority == best_pcb.priority:
+                    if p.pid < best_pcb.pid:
+                        best_pcb = p
+
+            if best_pcb is self.running:
+                return
+            if self.running is not self.idle_pcb:
+                self.ready_queue.append(self.running)
+            self.ready_queue.remove(best_pcb)
+            self.running = best_pcb        
         else:
             print("Unknown scheduling algorithm")
 
