@@ -1,0 +1,7 @@
+# Conda requirements for CS 143A Project 2.
+# The simulator and kernel use only the Python standard library; third-party
+# packages are not allowed. Grading uses Python 3.10.12.
+#
+#   conda create --name cs143a --file requirements.txt
+#   conda activate cs143a
+python=3.10.12
