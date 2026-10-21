@@ -42,6 +42,7 @@ class Kernel:
         self.waiting_queue = deque()
         self.idle_pcb = PCB(0, 0)
         self.running = self.idle_pcb
+        self.ticks = 0 #to count interrupts received by process
 
     # This method is triggered every time a new process has arrived.
     # new_process is this process's PID.
@@ -100,7 +101,11 @@ class Kernel:
             if self.running is not self.idle_pcb:
                 self.ready_queue.append(self.running)
             self.ready_queue.remove(best_pcb)
-            self.running = best_pcb        
+            self.running = best_pcb   
+        elif self.scheduling_algorithm == "RR":
+            if self.running is self.idle_pcb:
+                self.running = self.ready_queue.popleft()
+                self.ticks = 0  
         else:
             print("Unknown scheduling algorithm")
 
@@ -109,4 +114,11 @@ class Kernel:
     # Do not use real time to track how much time has passed as time is simulated.
     # DO NOT rename or delete this method. DO NOT change its arguments.
     def timer_interrupt(self) -> PID:
-        return self.running.pid 
+        if self.scheduling_algorithm == "RR":
+            self.ticks += 1
+            if self.ticks >= 4:
+                self.ticks = 0
+                if self.ready_queue:
+                    self.ready_queue.append(self.running)
+                    self.running = self.ready_queue.popleft()
+        return self.running.pid
