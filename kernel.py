@@ -1,6 +1,6 @@
 ### Fill in the following information before submitting
-# Group id: 
-# Members: 
+# Group id: 52
+# Members: Akshatvir Singh, Navaneeth Sujith, Samuel Cook
 
 
 
@@ -14,10 +14,12 @@ PID = int
 class PCB:
     pid: PID
     priority: int
+    process_type: str
 
-    def __init__(self, pid: PID, priority: int):
+    def __init__(self, pid: PID, priority: int, process_type: str = "Foreground"):
         self.pid = pid
         self.priority = priority
+        self.process_type = process_type
 
 
 # This class represents the Kernel of the simulation.
@@ -40,21 +42,70 @@ class Kernel:
         self.scheduling_algorithm = scheduling_algorithm
         self.ready_queue = deque()
         self.waiting_queue = deque()
-        self.idle_pcb = PCB(0, 0)
+        self.idle_pcb = PCB(0, 0, "Idle")
         self.running = self.idle_pcb
-        self.ticks = 0 #to count interrupts received by process
+        self.ticks = 0 # to count interrupts received by process in RR
+
+        # Multilevel scheduler state
+        self.foreground_queue = deque()
+        self.background_queue = deque()
+        self.foreground_ticks = 0
+        self.overall_ticks = 0
 
     # This method is triggered every time a new process has arrived.
     # new_process is this process's PID.
     # DO NOT rename or delete this method. DO NOT change its arguments.
     def new_process_arrived(self, new_process: PID, priority: int, process_type: str) -> PID:
-        self.ready_queue.append(PCB(new_process, priority))
+        pcb = PCB(new_process, priority, process_type)
+
+        if self.scheduling_algorithm == "Multilevel":
+
+            if self.running is self.idle_pcb:
+
+                self.running = pcb
+                
+                self.overall_ticks = 0
+
+                if process_type == "Foreground":
+            
+                    self.foreground_ticks = 0
+            else:
+                if process_type == "Foreground":
+                    self.foreground_queue.append(pcb)
+                else:
+                    self.background_queue.append(pcb)
+
+            return self.running.pid
+
+        self.ready_queue.append(pcb)
         self.choose_next_process()
         return self.running.pid  
 
     # This method is triggered every time the current process performs an exit syscall.
     # DO NOT rename or delete this method. DO NOT change its arguments.
     def syscall_exit(self) -> PID:
+        if self.scheduling_algorithm == "Multilevel":
+            if self.running.process_type == "Foreground":
+                if self.foreground_queue:
+                    self.running = self.foreground_queue.popleft()
+                    self.foreground_ticks = 0
+                elif self.background_queue:
+                    self.running = self.background_queue.popleft()
+                    self.overall_ticks = 0
+                else:
+                    self.running = self.idle_pcb
+                    self.overall_ticks = 0
+            elif self.running.process_type == "Background":
+                if self.background_queue:
+                    self.running = self.background_queue.popleft()
+                elif self.foreground_queue:
+                    self.running = self.foreground_queue.popleft()
+                    self.overall_ticks = 0
+                else:
+                    self.running = self.idle_pcb
+                    self.overall_ticks = 0
+            return self.running.pid
+
         self.running = self.idle_pcb
         self.choose_next_process()
         return self.running.pid
@@ -63,9 +114,9 @@ class Kernel:
     # DO NOT rename or delete this method. DO NOT change its arguments.
     def syscall_set_priority(self, new_priority: int) -> PID:
         self.running.priority = new_priority
-        self.choose_next_process()
+        if self.scheduling_algorithm != "Multilevel":
+            self.choose_next_process()
         return self.running.pid
-
 
     # This is where you can select the next process to run.
     # This method is not directly called by the simulator and is purely for your convinience.
@@ -73,7 +124,7 @@ class Kernel:
     # It is not required to actually use this method but it is recommended.
     def choose_next_process(self):
         if len(self.ready_queue) == 0:
-                return
+            return
         
         if self.scheduling_algorithm == "FCFS":
             if self.running is self.idle_pcb:
@@ -121,4 +172,34 @@ class Kernel:
                 if self.ready_queue:
                     self.ready_queue.append(self.running)
                     self.running = self.ready_queue.popleft()
+        elif self.scheduling_algorithm == "Multilevel":
+            if self.running is self.idle_pcb:
+                return self.running.pid
+
+            if self.running.process_type == "Foreground":
+                self.foreground_ticks += 1
+                if self.foreground_ticks >= 4:
+                    self.foreground_ticks = 0
+                    if self.foreground_queue:
+                        self.foreground_queue.append(self.running)
+                        self.running = self.foreground_queue.popleft()
+
+                self.overall_ticks += 1
+                if self.overall_ticks >= 20:
+                    if self.background_queue:
+                        self.foreground_queue.appendleft(self.running)
+                        self.running = self.background_queue.popleft()
+                        self.overall_ticks = 0
+                    else:
+                        self.overall_ticks = 0
+            elif self.running.process_type == "Background":
+                self.overall_ticks += 1
+                if self.overall_ticks >= 20:
+                    if self.foreground_queue:
+                        self.background_queue.appendleft(self.running)
+                        self.running = self.foreground_queue.popleft()
+                        self.overall_ticks = 0
+                    else:
+                        self.overall_ticks = 0
+
         return self.running.pid
